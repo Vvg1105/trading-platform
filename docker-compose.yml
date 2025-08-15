@@ -1,0 +1,109 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database for storing price data
+  postgres:
+    image: postgres:15-alpine
+    container_name: trading_postgres
+    environment:
+      POSTGRES_DB: trading_platform
+      POSTGRES_USER: trading_user
+      POSTGRES_PASSWORD: trading_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trading_user -d trading_platform"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis for caching and job queue
+  redis:
+    image: redis:7-alpine
+    container_name: trading_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Main trading platform application
+  trading-app:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: trading_app
+    environment:
+      - DATABASE_URL=postgresql://trading_user:trading_password@postgres:5432/trading_platform
+      - REDIS_URL=redis://redis:6379/0
+      - ALPHA_VANTAGE_API_KEY=${ALPHA_VANTAGE_API_KEY}
+      - POLYGON_API_KEY=${POLYGON_API_KEY}
+      - YAHOO_FINANCE_ENABLED=true
+    volumes:
+      - ./app:/app
+      - price_data:/app/data
+      - ./logs:/app/logs
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Data ingestion service (runs separately for scheduled ingestion)
+  data-ingestor:
+    build:
+      context: ./app
+      dockerfile: Dockerfile
+    container_name: trading_data_ingestor
+    environment:
+      - DATABASE_URL=postgresql://trading_user:trading_password@postgres:5432/trading_platform
+      - REDIS_URL=redis://redis:6379/0
+      - ALPHA_VANTAGE_API_KEY=${ALPHA_VANTAGE_API_KEY}
+      - POLYGON_API_KEY=${POLYGON_API_KEY}
+      - YAHOO_FINANCE_ENABLED=true
+    volumes:
+      - ./app:/app
+      - price_data:/app/data
+      - ./logs:/app/logs
+    command: ["python", "-m", "app.data.ingestor"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Optional: pgAdmin for database management
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: trading_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@trading.com
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  price_data:
+    driver: local
+
+networks:
+  default:
+    name: trading_network
