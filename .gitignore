@@ -58,7 +58,6 @@ Thumbs.db
 *.parquet
 *.h5
 *.hdf5
-data/
 datasets/
 raw_data/
 
