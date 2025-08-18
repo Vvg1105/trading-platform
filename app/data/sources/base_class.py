@@ -53,10 +53,11 @@ class DataSource(ABC):
     ## Methods ##
 
     def validate_symbol(self, symbol: str) -> bool:
-        """Validate if symboil is in the correct format"""
+        """Validate if symbol is in the correct format"""
         if not symbol or not isinstance(symbol, str):
-            raise InvalidSymbolError(f"Invalid symbol: {symbol}")
-        return True
+            return False
+        # Basic validation - alphanumeric and dots only
+        return symbol.replace('.', '').replace('-', '').isalpha()
     
     def check_rate_limit(self) -> bool:
         """Check if the data source is rate limited"""
