@@ -54,10 +54,8 @@ class DataSource(ABC):
 
     def validate_symbol(self, symbol: str) -> bool:
         """Validate if symbol is in the correct format"""
-        if not symbol or not isinstance(symbol, str):
-            return False
-        # Basic validation - alphanumeric and dots only
-        return symbol.replace('.', '').replace('-', '').isalpha()
+        # This will be implemented in the child class
+        raise NotImplementedError("validate_symbol method not implemented")
     
     def check_rate_limit(self) -> bool:
         """Check if the data source is rate limited"""
@@ -84,7 +82,7 @@ class DataSource(ABC):
         pass
     
     @abstractmethod
-    def fetch_raw_data(self, symbol: str, period = str, interval = str) -> pd.DataFrame:
+    def _fetch_raw_data(self, symbol: str, period = str, interval = str) -> pd.DataFrame:
         """Fetch raw data for a given symbol and date range"""
         pass
     

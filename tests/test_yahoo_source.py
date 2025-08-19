@@ -11,7 +11,7 @@ import yfinance as yf
 import pandas as pd
 from unittest.mock import Mock, patch
 from app.data.sources.yahoo_source import YahooSource
-from app.data.sources.base_class import DataSource, RateLimitError, InvalidSymbolError, DataSourceError
+from app.data.sources.base_class import DataSource, DataSourceError, InvalidSymbolError
 
 class TestYahooSource(unittest.TestCase):
 
@@ -43,7 +43,8 @@ class TestYahooSource(unittest.TestCase):
         """Test validate_symbol with an invalid symbol"""
         invalid_symbols = [123, None, "", "123AAPL", "AAPL@"]
         for symbol in invalid_symbols:
-            self.assertFalse(self.yahoo_source.validate_symbol(symbol))
+            with self.assertRaises(InvalidSymbolError):
+                self.yahoo_source.validate_symbol(symbol)
         
     def test_check_rate_limit(self):
         """Test the check_rate_limit method"""
@@ -87,24 +88,47 @@ class TestYahooSource(unittest.TestCase):
         mock_ticker_instance.history.return_value = mock_data
         mock_ticker.return_value = mock_ticker_instance
 
-        result = self.yahoo_source.fetch_raw_data("AAPL", "1d", "1d")
+        result = self.yahoo_source.fetch_data("AAPL", "1d", "1d")
         
         self.assertIsInstance(result, pd.DataFrame)
         mock_ticker.assert_called_once_with("AAPL")
+        self.assertEqual(self.yahoo_source.request_count, 1)
+
+    @patch('yfinance.Ticker')
+    def test_fetch_raw_data_error(self, mock_ticker):
+        """Test raw data fetching with an error"""
+        # Mock yfinance to raise an exception
+        mock_ticker.side_effect = Exception("Newtork error")
+        with self.assertRaises(DataSourceError):
+            self.yahoo_source._fetch_raw_data("INVALID", "1y", "1d")
+    
+    @patch('yfinance.Ticker')
+    def test_fetch_data_invalid_symbol(self, mock_ticker):
+        """Test fetching data with an invalid symbol"""
+        with self.assertRaises(DataSourceError):
+            self.yahoo_source.fetch_data("", "1y", "1d")
+        
+        mock_ticker.assert_not_called()
+        self.assertEqual(self.yahoo_source.request_count, 0)
+
+    @patch('yfinance.Ticker')
+    def test_fetch_data_rate_limit(self, mock_ticker):
+        """Test that rate limiting is checked before API call"""
+
+        # Mock the yfinance response
+        mock_data = pd.DataFrame({
+            'Open': [100], 'High': [105], 'Low': [99], 
+            'Close': [103], 'Volume': [1000]
+        })
+        mock_ticker_instance = Mock()
+        mock_ticker_instance.history.return_value = mock_data
+        mock_ticker.return_value = mock_ticker_instance
+        
+        result = self.yahoo_source.fetch_data("AAPL", "1y", "1d")
+
+        # Verify the method completed successfully
+        self.assertIsInstance(result, pd.DataFrame)
+        self.assertEqual(self.yahoo_source.request_count, 1)
     
 if __name__ == '__main__':
     unittest.main()
-    
-    # @patch('yfinance.Ticker')
-    # def test_fetch_raw_data_error(self, mock_ticker):
-    #     """Test raw data fetching with an error"""
-    #     # Mock yfinance to raise an exception
-    #     mock_ticker.side_effect = Exception("Test error")
-    #     with self.assertRaises(DataSourceError):
-    #         self.yahoo_source.fetch_raw_data("INVALID", "1y", "1d")
-    
-    # @patch('yfinance.Ticker')
-    # def test_fetch_data_valid(self, mock_ticker):
-    #     """Test data fetching with valid data"""
-    #     # Mock yfinance to return valid data
-    #     mock_ticker.return_value.history.return_value = pd.DataFrame({

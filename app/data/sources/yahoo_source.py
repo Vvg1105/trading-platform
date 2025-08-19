@@ -36,6 +36,15 @@ class YahooSource(DataSource):
     
     ## Methods ##
 
+    def validate_symbol(self, symbol: str) -> bool:
+        """Validate if symbol is in the correct format"""
+        if not symbol or not isinstance(symbol, str):
+            raise InvalidSymbolError("Symbol is not a valid string")
+        # Basic validation - alphanumeric and dots only
+        if not symbol.replace('.', '').replace('-', '').isalpha():
+            raise InvalidSymbolError("Symbol is not a valid string")
+        return True
+
     def check_rate_limit(self) -> bool:
         """Check if the data source is rate limited"""
         # Yahoo finance doesn't have a rate limit
@@ -75,7 +84,7 @@ class YahooSource(DataSource):
             self.check_rate_limit()
 
             # Fetch raw data
-            raw_data = self.fetch_raw_data(symbol, period, interval)
+            raw_data = self._fetch_raw_data(symbol, period, interval)
 
             # Standardize the data
             standardized_data = self._standardize_data(raw_data)
@@ -90,7 +99,7 @@ class YahooSource(DataSource):
             raise DataSourceError(f"Error fetching data from Yahoo Finance: {str(e)}")
     
     
-    def fetch_raw_data(self, symbol: str, period = str, interval = str) -> pd.DataFrame:
+    def _fetch_raw_data(self, symbol: str, period = str, interval = str) -> pd.DataFrame:
         """Fetch raw data for a given symbol and date range"""
         try:
             # Download data from Yahoo Finance
